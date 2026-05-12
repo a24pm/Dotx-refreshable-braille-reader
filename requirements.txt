@@ -1,0 +1,11 @@
+flask==3.1.0
+flask-socketio==5.5.1
+pytesseract==0.3.13
+Pillow==11.1.0
+easyocr==1.7.2
+python-docx==1.1.2
+PyPDF2==3.0.1
+groq==0.25.0
+pyserial==3.5
+eventlet==0.37.0
+python-dotenv==1.0.1

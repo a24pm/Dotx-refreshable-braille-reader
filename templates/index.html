@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Braille Script Web Application - OCR text extraction and Braille display for visually impaired users">
+    <title>Braille Script - Accessibility Tool</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+    <!-- ═══ HEADER ═══ -->
+    <header id="app-header">
+        <div class="header-content">
+            <div class="logo-group">
+                <div class="logo-icon" aria-hidden="true">⠃⠗</div>
+                <div>
+                    <h1>Braille Script</h1>
+                    <p class="tagline">Accessibility-First Document Reader</p>
+                </div>
+            </div>
+            <div class="serial-status" id="serialStatus">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Disconnected</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══ MAIN CONTENT ═══ -->
+    <main id="app-main">
+        <!-- ─── Upload Section ─── -->
+        <section class="card upload-section" id="uploadSection" aria-label="Upload Document">
+            <div class="card-header">
+                <div class="card-icon">📄</div>
+                <div>
+                    <h2>Upload Document</h2>
+                    <p>Upload an image or document to extract text via OCR</p>
+                </div>
+            </div>
+
+            <div class="drop-zone" id="dropZone" tabindex="0" role="button" aria-label="Drop zone for file upload. Click or press Enter to browse files.">
+                <div class="drop-zone-content">
+                    <div class="drop-icon" aria-hidden="true">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </div>
+                    <p class="drop-text">Drag & Drop your file here</p>
+                    <p class="drop-subtext">or click to browse</p>
+                    <p class="drop-formats">Supports: PNG, JPG, PDF, DOCX, TXT</p>
+                </div>
+                <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.bmp,.tiff,.webp,.pdf,.docx,.txt" hidden>
+            </div>
+
+            <!-- Upload progress -->
+            <div class="upload-progress" id="uploadProgress" hidden>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="uploadProgressFill"></div>
+                </div>
+                <p class="progress-text" id="uploadProgressText">Processing...</p>
+            </div>
+
+            <!-- Extracted Text -->
+            <div class="extracted-text-container" id="extractedTextContainer" hidden>
+                <div class="extracted-header">
+                    <h3>Extracted Text</h3>
+                    <div class="extracted-meta">
+                        <span id="extractedFilename" class="meta-badge"></span>
+                        <span id="extractedCharCount" class="meta-badge"></span>
+                    </div>
+                </div>
+                <div class="extracted-text" id="extractedText" aria-hidden="true"></div>
+                <div class="extracted-actions">
+                    <button class="btn btn-ghost" onclick="clearExtracted()">
+                        <span class="btn-icon">✕</span> Clear
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ─── Braille Display Section ─── -->
+        <section class="card braille-section" id="brailleSection" aria-label="Braille Display">
+            <div class="card-header">
+                <div class="card-icon">⠿</div>
+                <div>
+                    <h2>Braille Display</h2>
+                    <p>5-character Braille output — synced with serial hardware</p>
+                </div>
+            </div>
+
+            <!-- Braille Cells -->
+            <div class="braille-display" id="brailleDisplay" aria-live="polite">
+                <div class="braille-cell" id="cell0">
+                    <div class="cell-char">—</div>
+                    <div class="cell-label">1</div>
+                </div>
+                <div class="braille-cell" id="cell1">
+                    <div class="cell-char">—</div>
+                    <div class="cell-label">2</div>
+                </div>
+                <div class="braille-cell" id="cell2">
+                    <div class="cell-char">—</div>
+                    <div class="cell-label">3</div>
+                </div>
+                <div class="braille-cell" id="cell3">
+                    <div class="cell-char">—</div>
+                    <div class="cell-label">4</div>
+                </div>
+                <div class="braille-cell" id="cell4">
+                    <div class="cell-char">—</div>
+                    <div class="cell-label">5</div>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="braille-progress" id="brailleProgressContainer" hidden>
+                <div class="progress-info">
+                    <span id="brailleChunkInfo">Chunk 0 / 0</span>
+                    <span id="braillePercent">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill braille-fill" id="brailleProgressFill"></div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="braille-controls">
+                <button class="btn btn-danger" id="stopBrailleBtn" onclick="stopBraille()" disabled>
+                    <span class="btn-icon">⏹</span> Stop
+                </button>
+            </div>
+
+            <!-- Serial Monitor -->
+            <details class="serial-monitor" id="serialMonitor">
+                <summary>
+                    <span class="monitor-icon" aria-hidden="true">📟</span> Serial Monitor
+                    <span class="monitor-badge" id="logCount">0</span>
+                </summary>
+                <div class="monitor-content" id="serialLog" role="log" aria-label="Serial communication log"></div>
+            </details>
+        </section>
+
+        <!-- ─── Braille Guide Section ─── -->
+        <section class="card guide-section" id="guideSection" aria-label="Braille Alphabet Guide">
+            <div class="card-header">
+                <div class="card-icon">📖</div>
+                <div>
+                    <h2>Braille Alphabet Guide</h2>
+                    <p>Reference chart for the English Braille alphabet</p>
+                </div>
+            </div>
+            <div class="guide-image-container" style="text-align: center; margin-top: 1rem; background: var(--surface-light); border-radius: var(--radius); padding: 1.5rem;">
+                <img src="{{ url_for('static', filename='img/brailliescript.jpg') }}" alt="Braille Alphabet Chart" class="braille-guide-img" style="max-width: 100%; border-radius: 8px; filter: invert(1);">
+            </div>
+        </section>
+
+        <!-- ─── AI Chatbot Section ─── -->
+        <section class="card chat-section" id="chatSection" aria-label="AI Assistant">
+            <div class="card-header">
+                <div class="card-icon">🤖</div>
+                <div>
+                    <h2>AI Assistant</h2>
+                    <p>Ask questions using your voice — powered by Groq AI</p>
+                </div>
+            </div>
+
+            <!-- Chat Messages -->
+            <div class="chat-messages" id="chatMessages" role="log" aria-label="Chat conversation" aria-live="polite">
+                <div class="chat-welcome">
+                    <div class="welcome-icon" aria-hidden="true">👋</div>
+                    <p>Hello! I'm your AI assistant. Press the microphone button and ask me anything.</p>
+                    <p class="welcome-hint">You can also type your question below.</p>
+                </div>
+            </div>
+
+            <!-- Chat Input -->
+            <div class="chat-input-area">
+                <div class="chat-input-group">
+                    <input type="text" id="chatInput" class="chat-input" 
+                           placeholder="Type your question or use voice..." 
+                           aria-label="Type your question" 
+                           autocomplete="off">
+                    <button class="btn btn-icon btn-send" id="sendChatBtn" onclick="sendChat()" aria-label="Send message">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                        </svg>
+                    </button>
+                </div>
+                <button class="btn btn-mic" id="micBtn" onclick="toggleVoice()" aria-label="Press to start voice input">
+                    <div class="mic-ripple" id="micRipple"></div>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                        <line x1="12" y1="19" x2="12" y2="23"/>
+                        <line x1="8" y1="23" x2="16" y2="23"/>
+                    </svg>
+                    <span class="mic-label" id="micLabel">Tap to Speak</span>
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- ═══ FOOTER ═══ -->
+    <footer id="app-footer">
+        <p>Braille Script &copy; 2025 — Built for Accessibility</p>
+    </footer>
+
+    <!-- ═══ TOAST NOTIFICATIONS ═══ -->
+    <div class="toast-container" id="toastContainer" aria-live="assertive"></div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
